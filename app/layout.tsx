@@ -16,7 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Sistemper 2025 - Sistema de Orçamentos para Vidraçarias",
   description: "Sistema completo para gestão de orçamentos, clientes e cálculos para vidraçarias",
-    generator: 'v0.app'
 }
 
 export default function RootLayout({
