@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calculator, FileText, Search, Building2, Settings, Power, PowerOff, Save, Fish, Palette } from "lucide-react"
 import Link from "next/link"
 import { UserMenu } from "@/components/user-menu"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export function HomeMenu() {
   const [systemStatus, setSystemStatus] = useState<"active" | "standby">("active")
@@ -120,6 +121,8 @@ export function HomeMenu() {
                 <Save className="h-4 w-4" />
                 <span>Fechar & Salvar</span>
               </Button>
+
+              <ThemeToggle />
 
               <UserMenu />
             </div>
