@@ -16,6 +16,7 @@ import {
   Fish,
   Palette,
   CalendarDays,
+  Table2,
 } from "lucide-react"
 import Link from "next/link"
 import { UserMenu } from "@/components/user-menu"
@@ -90,6 +91,13 @@ export function HomeMenu() {
       icon: CalendarDays,
       href: "/agendamentos",
       color: "bg-red-500/10 text-red-400 border-red-500/20",
+    },
+    {
+      title: "Painel de Tabelas",
+      description: "Vidros, perfis, kits de alumínio e acessórios atualizados",
+      icon: Table2,
+      href: "/tabelas",
+      color: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     },
     {
       title: "Dados da Empresa",

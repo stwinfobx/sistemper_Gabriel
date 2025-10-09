@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   ArrowLeft,
   FileText,
@@ -21,58 +22,74 @@ import {
   CreditCard,
 } from "lucide-react"
 import Link from "next/link"
+import {
+  QuoteClientData,
+  QuoteDraft,
+  generateQuoteNumber,
+  quoteRecordToDraft,
+  quoteStorage,
+  formatQuoteDate,
+} from "@/lib/quotes-storage"
 
-interface ClientData {
-  nome: string
-  telefone1: string
-  telefone2: string
-  endereco: string
-  bairro: string
-  cidade: string
-  documento: string
-  email: string
-}
-
-interface QuoteData {
-  numero: string
-  dataAbertura: string
-  status: "Em edição" | "Salvo"
-  cliente: ClientData
-  vendedorId: string
-  vendedorNome: string
-  vendedorTelefone: string
-}
+const createInitialQuote = (): QuoteDraft => ({
+  numero: generateQuoteNumber(),
+  dataAbertura: formatQuoteDate(),
+  status: "Em edição",
+  cliente: {
+    nome: "",
+    telefone1: "",
+    telefone2: "",
+    endereco: "",
+    bairro: "",
+    cidade: "",
+    documento: "",
+    email: "",
+  },
+  vendedorId: "1",
+  vendedorNome: "Gabriel Batista",
+  vendedorTelefone: "(11) 99999-9999",
+})
 
 export function NewQuoteForm() {
-  const [quoteData, setQuoteData] = useState<QuoteData>({
-    numero: "2025-000123", // Auto-generated
-    dataAbertura: new Date().toLocaleString("pt-BR"),
-    status: "Em edição",
-    cliente: {
-      nome: "",
-      telefone1: "",
-      telefone2: "",
-      endereco: "",
-      bairro: "",
-      cidade: "",
-      documento: "",
-      email: "",
-    },
-    vendedorId: "1",
-    vendedorNome: "Gabriel Batista",
-    vendedorTelefone: "(11) 99999-9999",
-  })
+  const [quoteData, setQuoteData] = useState<QuoteDraft>(createInitialQuote)
 
-  const [errors, setErrors] = useState<Partial<ClientData>>({})
+  const [errors, setErrors] = useState<Partial<QuoteClientData>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [showNewSellerModal, setShowNewSellerModal] = useState(false)
+  const [feedback, setFeedback] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null)
 
   // Available sellers (mock data)
   const sellers = [
     { id: "1", nome: "Gabriel Batista", telefone: "(11) 99999-9999" },
     { id: "2", nome: "Maria Silva", telefone: "(11) 88888-8888" },
     { id: "3", nome: "João Santos", telefone: "(11) 77777-7777" },
-  ]
+]
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const numeroFromQuery = params.get("numero")
+
+    if (numeroFromQuery) {
+      const stored = quoteStorage.findByNumber(numeroFromQuery)
+      if (stored) {
+        setQuoteData(quoteRecordToDraft(stored))
+        setFeedback({ type: "info", text: `Orçamento ${numeroFromQuery} carregado do histórico.` })
+        return
+      }
+    }
+
+    setQuoteData((prev) => ({
+      ...prev,
+      cliente: {
+        ...prev.cliente,
+        nome: params.get("nome") || prev.cliente.nome,
+        telefone1: params.get("telefone1") || prev.cliente.telefone1,
+        telefone2: params.get("telefone2") || prev.cliente.telefone2,
+        documento: params.get("documento") || prev.cliente.documento,
+      },
+    }))
+  }, [])
 
   // Format phone number
   const formatPhone = (value: string) => {
@@ -115,7 +132,7 @@ export function NewQuoteForm() {
     return emailRegex.test(email)
   }
 
-  const handleClientChange = (field: keyof ClientData, value: string) => {
+  const handleClientChange = (field: keyof QuoteClientData, value: string) => {
     let formattedValue = value
 
     // Apply formatting
@@ -134,9 +151,15 @@ export function NewQuoteForm() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
+    if (feedback) {
+      setFeedback(null)
+    }
   }
 
   const handleSellerChange = (sellerId: string) => {
+    if (feedback) {
+      setFeedback(null)
+    }
     const seller = sellers.find((s) => s.id === sellerId)
     if (seller) {
       setQuoteData((prev) => ({
@@ -149,7 +172,7 @@ export function NewQuoteForm() {
   }
 
   const validateForm = () => {
-    const newErrors: Partial<ClientData> = {}
+    const newErrors: Partial<QuoteClientData> = {}
 
     if (!quoteData.cliente.nome.trim()) {
       newErrors.nome = "Nome do cliente é obrigatório"
@@ -183,22 +206,19 @@ export function NewQuoteForm() {
     }
 
     setIsLoading(true)
+    setFeedback(null)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Update status
-      setQuoteData((prev) => ({ ...prev, status: "Salvo" }))
-
-      // Here would be the actual API call
-      // const response = await fetch('/api/orcamentos', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(quoteData)
-      // })
+      const draftToPersist: QuoteDraft = {
+        ...quoteData,
+        status: "Salvo",
+      }
+      quoteStorage.upsert(draftToPersist)
+      setQuoteData(draftToPersist)
+      setFeedback({ type: "success", text: `Orçamento ${draftToPersist.numero} salvo no navegador.` })
     } catch (error) {
       console.error("Erro ao salvar orçamento:", error)
+      setFeedback({ type: "error", text: "Não foi possível salvar este orçamento no navegador." })
     } finally {
       setIsLoading(false)
     }
@@ -242,6 +262,11 @@ export function NewQuoteForm() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8 max-w-4xl">
+        {feedback && (
+          <Alert variant={feedback.type === "error" ? "destructive" : "default"} className="mb-6">
+            <AlertDescription>{feedback.text}</AlertDescription>
+          </Alert>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quote Header */}
           <div className="lg:col-span-3">
