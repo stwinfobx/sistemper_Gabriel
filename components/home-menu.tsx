@@ -4,7 +4,19 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calculator, FileText, Search, Building2, Settings, Power, PowerOff, Save, Fish, Palette } from "lucide-react"
+import {
+  Calculator,
+  FileText,
+  Search,
+  Building2,
+  Settings,
+  Power,
+  PowerOff,
+  Save,
+  Fish,
+  Palette,
+  CalendarDays,
+} from "lucide-react"
 import Link from "next/link"
 import { UserMenu } from "@/components/user-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -71,6 +83,13 @@ export function HomeMenu() {
       icon: Palette,
       href: "/itens-adicionais",
       color: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+    },
+    {
+      title: "Central de Agendamentos",
+      description: "Controle visitas técnicas e retornos com calendário unificado",
+      icon: CalendarDays,
+      href: "/agendamentos",
+      color: "bg-red-500/10 text-red-400 border-red-500/20",
     },
     {
       title: "Dados da Empresa",
