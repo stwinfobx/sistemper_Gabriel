@@ -70,25 +70,47 @@ export function NewQuoteForm() {
     const params = new URLSearchParams(window.location.search)
     const numeroFromQuery = params.get("numero")
 
-    if (numeroFromQuery) {
-      const stored = quoteStorage.findByNumber(numeroFromQuery)
-      if (stored) {
-        setQuoteData(quoteRecordToDraft(stored))
-        setFeedback({ type: "info", text: `Orçamento ${numeroFromQuery} carregado do histórico.` })
-        return
+    async function loadQuote() {
+      if (numeroFromQuery) {
+        const stored = await quoteStorage.findByNumber(numeroFromQuery)
+        if (stored) {
+          // If stored is from API, we might need to map it back to QuoteDraft
+          setQuoteData({
+            numero: stored.number,
+            dataAbertura: formatQuoteDate(new Date(stored.createdAt)),
+            status: stored.status as any,
+            cliente: {
+              nome: stored.client?.name || "",
+              telefone1: stored.client?.phone || "",
+              telefone2: "",
+              endereco: stored.client?.address || "",
+              bairro: "",
+              cidade: "",
+              documento: stored.client?.document || "",
+              email: stored.client?.email || "",
+            },
+            vendedorId: "1",
+            vendedorNome: "Gabriel Batista",
+            vendedorTelefone: "(11) 99999-9999",
+          })
+          setFeedback({ type: "info", text: `Orçamento ${numeroFromQuery} carregado do banco de dados.` })
+          return
+        }
       }
+
+      setQuoteData((prev) => ({
+        ...prev,
+        cliente: {
+          ...prev.cliente,
+          nome: params.get("nome") || prev.cliente.nome,
+          telefone1: params.get("telefone1") || prev.cliente.telefone1,
+          telefone2: params.get("telefone2") || prev.cliente.telefone2,
+          documento: params.get("documento") || prev.cliente.documento,
+        },
+      }))
     }
 
-    setQuoteData((prev) => ({
-      ...prev,
-      cliente: {
-        ...prev.cliente,
-        nome: params.get("nome") || prev.cliente.nome,
-        telefone1: params.get("telefone1") || prev.cliente.telefone1,
-        telefone2: params.get("telefone2") || prev.cliente.telefone2,
-        documento: params.get("documento") || prev.cliente.documento,
-      },
-    }))
+    loadQuote()
   }, [])
 
   // Format phone number
@@ -213,12 +235,23 @@ export function NewQuoteForm() {
         ...quoteData,
         status: "Salvo",
       }
-      quoteStorage.upsert(draftToPersist)
-      setQuoteData(draftToPersist)
-      setFeedback({ type: "success", text: `Orçamento ${draftToPersist.numero} salvo no navegador.` })
+      const saved = await quoteStorage.upsert(draftToPersist)
+      
+      // Update local state with any data from server (like generated ID)
+      setQuoteData(prev => ({
+        ...prev,
+        numero: saved.number,
+        status: "Salvo"
+      }))
+      
+      setFeedback({ type: "success", text: `Orçamento ${saved.number} salvo no banco de dados.` })
+      
+      // Save the active budget number to localStorage for easy retrieval in other forms
+      localStorage.setItem("sistemper_active_budget", saved.number)
+      
     } catch (error) {
       console.error("Erro ao salvar orçamento:", error)
-      setFeedback({ type: "error", text: "Não foi possível salvar este orçamento no navegador." })
+      setFeedback({ type: "error", text: "Não foi possível salvar este orçamento no banco de dados." })
     } finally {
       setIsLoading(false)
     }

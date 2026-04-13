@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:shujin791@localhost:5432/sistemper?schema=public"
+}
+
+model Tipology {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("Vidro")
+  imagePath   String?
+  formula     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  BudgetItems BudgetItem[]
+  Kits        Kit[]
+}
+
+model Kit {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  tipologyId  String?
+  tipology    Tipology?      @relation(fields: [tipologyId], references: [id])
+  components  KitComponent[]
+  flags       Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model KitComponent {
+  id             String   @id @default(cuid())
+  kitId          String
+  kit            Kit      @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  materialId     String
+  material       Material @relation(fields: [materialId], references: [id])
+  quantityFormula String?  // e.g. "(W * 2) + (H * 2)"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Material {
+  id             String         @id @default(cuid())
+  name           String         @unique
+  baseName       String?        // e.g. "Incolor 8mm"
+  normalizedName String?
+  type           String
+  unit           String
+  price          Decimal        @db.Decimal(10, 2)
+  provider       String?
+  thickness      Int?
+  color          String?
+  category       String?        // e.g. "Perfil", "Vidro", "Acessório"
+  updatedAt      DateTime       @updatedAt
+  KitComponents  KitComponent[]
+
+  @@index([normalizedName])
+}
+
+model MaterialAdjustment {
+  id          String   @id @default(cuid())
+  type        String   // e.g. "Glass", "Aluminum", "Accessory"
+  provider    String?  // e.g. "Tempermax"
+  percentage  Decimal  @db.Decimal(5, 2) @default(0)
+  updatedAt   DateTime @updatedAt
+  @@unique([type, provider])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  document  String?  @unique
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  budgets   Budget[]
+  createdAt DateTime @default(now())
+}
+
+model Budget {
+  id          String       @id @default(cuid())
+  number      String       @unique
+  status      String       @default("Em edição")
+  totalValue  Decimal      @db.Decimal(10, 2) @default(0)
+  clientId    String?
+  client      Client?      @relation(fields: [clientId], references: [id])
+  items       BudgetItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model BudgetItem {
+  id          String   @id @default(cuid())
+  budgetId    String
+  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  tipologyId  String?
+  tipology    Tipology? @relation(fields: [tipologyId], references: [id])
+  name        String
+  width       Int
+  height      Int
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  details     Json?
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+}

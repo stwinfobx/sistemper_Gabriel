@@ -3,7 +3,9 @@ import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AluminumKitsTable } from "@/components/tabelas/aluminum-kits-table"
+import { KitsCompositionTable } from "@/components/tabelas/kits-composition-table"
 
 export default function PrecosPage() {
   return (
@@ -18,12 +20,12 @@ export default function PrecosPage() {
                   Tabelas
                 </Button>
               </Link>
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">Kits de alumínio</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Kits e Acessórios</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Tabela de kits e preços</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Tabela de Kits e Acessórios</h1>
               <p className="text-sm text-muted-foreground">
-                Mostra boxes, sacadas, portas pivotantes e corrimãos com base de fábrica e markup recomendado.
+                Consulte a composição completa dos kits (Portões, Boxes, Sacadas) ou veja o preço unitário de cada ferragem.
               </p>
             </div>
           </div>
@@ -34,17 +36,30 @@ export default function PrecosPage() {
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>Como usar</CardTitle>
-            <CardDescription>Filtre pelo código ou categoria para localizar o kit desejado.</CardDescription>
+            <CardDescription>Navegue entre as abas para consultar composições fechadas ou componentes individuais.</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            A coluna de preço sugerido aplica automaticamente a porcentagem definida no markup. Caso negocie um valor
-            diferente, atualize a base diretamente antes de gerar o orçamento definitivo.
+            A aba "Composição de Kits" mostra quais itens formam o pacote (ex: Box Frontal). A aba "Acessórios Avulsos" permite consultar e editar preços unitários de ferragens e acessórios avulsos.
           </CardContent>
         </Card>
 
-        <AluminumKitsTable />
+        <Tabs defaultValue="kits" className="space-y-6">
+          <TabsList className="bg-muted w-full md:w-auto grid grid-cols-2 md:inline-grid">
+            <TabsTrigger value="kits">Composição de Kits (Portões/Boxes)</TabsTrigger>
+            <TabsTrigger value="acessorios">Acessórios Avulsos (Ferragens)</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="kits" className="mt-0">
+            <KitsCompositionTable />
+          </TabsContent>
+          
+          <TabsContent value="acessorios" className="mt-0">
+            <AluminumKitsTable />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   )
 }
+
 

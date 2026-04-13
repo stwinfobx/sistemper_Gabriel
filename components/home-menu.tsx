@@ -13,17 +13,17 @@ import {
   Power,
   PowerOff,
   Save,
-  Fish,
   Palette,
   CalendarDays,
   Table2,
+  Fence,
 } from "lucide-react"
 import Link from "next/link"
 import { UserMenu } from "@/components/user-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export function HomeMenu() {
-  const [systemStatus, setSystemStatus] = useState<"active" | "standby">("active")
+  const [systemStatus, setSystemStatus] = useState<"active" | "standby" >("active")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   const toggleSystemStatus = () => {
@@ -58,6 +58,13 @@ export function HomeMenu() {
       color: "bg-green-500/10 text-green-400 border-green-500/20",
     },
     {
+      title: "Cálculo Rápido - Portões",
+      description: "Portões de correr, elevar e gradis sob medida",
+      icon: Fence,
+      href: "/calculo/portoes",
+      color: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    },
+    {
       title: "Novo Orçamento",
       description: "Cadastre cliente e inicie um novo orçamento",
       icon: FileText,
@@ -70,13 +77,6 @@ export function HomeMenu() {
       icon: Search,
       href: "/orcamentos/buscar",
       color: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    },
-    {
-      title: "Aquário",
-      description: "Cálculo especializado para aquários de vidro",
-      icon: Fish,
-      href: "/calculo/aquario",
-      color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
     },
     {
       title: "Itens Adicionais",

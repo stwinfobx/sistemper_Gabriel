@@ -58,30 +58,63 @@ const persist = (quotes: QuoteRecord[]) => {
 }
 
 export const quoteStorage = {
-  getAll(): QuoteRecord[] {
+  // Local (Legacy/Draft) methods
+  getAllLocal(): QuoteRecord[] {
     if (!isBrowser()) return []
     return safeParse(window.localStorage.getItem(STORAGE_KEY))
   },
-  findByNumber(numero: string): QuoteRecord | undefined {
-    return this.getAll().find((quote) => quote.numero === numero)
-  },
-  upsert(quote: QuoteDraft): QuoteRecord {
-    const record: QuoteRecord = {
-      ...quote,
-      updatedAt: new Date().toISOString(),
+  
+  // API (New) methods
+  async getAll(): Promise<any[]> {
+    try {
+      const response = await fetch("/api/budgets")
+      return await response.json()
+    } catch (error) {
+      console.error("Error fetching budgets:", error)
+      return []
     }
-    const quotes = this.getAll()
-    const index = quotes.findIndex((item) => item.numero === record.numero)
-    if (index >= 0) {
-      quotes[index] = record
-    } else {
-      quotes.push(record)
-    }
-    persist(quotes)
-    return record
   },
-  remove(numero: string): QuoteRecord[] {
-    const quotes = this.getAll().filter((quote) => quote.numero !== numero)
+
+  async findByNumber(numero: string): Promise<any | undefined> {
+    try {
+      const response = await fetch(`/api/budgets?number=${numero}`)
+      return await response.json()
+    } catch (error) {
+      return undefined
+    }
+  },
+
+  async upsert(quote: QuoteDraft): Promise<any> {
+    try {
+      // Convert QuoteDraft to the format expected by our API
+      const body = {
+        number: quote.numero,
+        items: [], // Items are added separately via calculation forms usually
+        totalValue: 0,
+        client: {
+          name: quote.cliente.nome,
+          document: quote.cliente.documento,
+          email: quote.cliente.email,
+          phone: quote.cliente.telefone1,
+          address: `${quote.cliente.endereco}, ${quote.cliente.bairro}, ${quote.cliente.cidade}`
+        }
+      }
+
+      const response = await fetch("/api/budgets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      })
+      return await response.json()
+    } catch (error) {
+      console.error("Error upserting budget:", error)
+      throw error
+    }
+  },
+
+  remove(numero: string) {
+    // For now, keep local removal if needed, but we should add API DELETE
+    const quotes = this.getAllLocal().filter((quote) => quote.numero !== numero)
     persist(quotes)
     return quotes
   },

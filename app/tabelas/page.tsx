@@ -3,20 +3,20 @@ import Image from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Boxes, Layers3, Ruler } from "lucide-react"
+import { ArrowLeft, Boxes, Layers3, Ruler, TrendingUp } from "lucide-react"
 
 const tableCards = [
   {
     href: "/tabelas/vidros",
     title: "Tabela de Vidros",
-    description: "Três colunas com Tempermax, Divinal e Blindex com reajuste percentual.",
+    description: "Preços por fornecedor com reajuste automático.",
     image: "/placeholder.jpg",
     icon: Layers3,
   },
   {
     href: "/tabelas/perfis",
     title: "Tabela de Perfis",
-    description: "Visual de perfis, pesquisa por código e listas rápidas de puxadores e braços.",
+    description: "Visual de perfis, pesquisa por código e listas rápidas de acessórios.",
     image: "/placeholder.jpg",
     icon: Ruler,
   },
@@ -26,13 +26,6 @@ const tableCards = [
     description: "Kits de alumínio, boxes, sacadas e corrimãos com markup previsto.",
     image: "/placeholder.jpg",
     icon: Boxes,
-  },
-  {
-    href: "/tabelas/jatos-peliculas",
-    title: "Jatos e Películas",
-    description: "Gestão de jatos, películas e complementos com margem editable.",
-    image: "/placeholder.jpg",
-    icon: Layers3,
   },
 ]
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,12 +16,12 @@ import {
   Plus,
   DollarSign,
   TrendingUp,
-  Fish,
   RefreshCw,
   FileText,
 } from "lucide-react"
 import Link from "next/link"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { TypologySelector } from "./typology-selector"
 
 interface GlassItem {
   id: string
@@ -35,7 +35,7 @@ interface CalculationData {
   altura: number
   largura2?: number
   quantidade: number
-  temperado: "Tempermax" | "Divinal" | "Blindex" | ""
+  temperado: string
   corVidro: string
   corPerfil: string
   ambiente: string
@@ -59,6 +59,7 @@ export function GlassCalculationForm() {
     valorUnitario: 0,
     valorTotal: 0,
   })
+  const [selectedTipology, setSelectedTipology] = useState<any>(null)
 
   const [showMarginModal, setShowMarginModal] = useState(false)
   const [showCostModal, setShowCostModal] = useState(false)
@@ -76,54 +77,102 @@ export function GlassCalculationForm() {
     { id: "6", nome: "Porta Pivotante", categoria: "Porta" },
   ]
 
-  const glassColors = [
-    "Incolor 6mm",
-    "Incolor 8mm",
-    "Incolor 10mm",
-    "Fumê 6mm",
-    "Fumê 8mm",
-    "Verde 6mm",
-    "Verde 8mm",
-    "Bronze 6mm",
-    "Bronze 8mm",
-  ]
+  const [groupedMaterials, setGroupedMaterials] = useState<any[]>([])
+  const [loadingMaterials, setLoadingMaterials] = useState(true)
+  const [calculationResult, setCalculationResult] = useState<any>(null)
+
+  useEffect(() => {
+    async function fetchMaterials() {
+      try {
+        const response = await fetch("/api/materials?type=Glass&grouped=true")
+        const data = await response.json()
+        setGroupedMaterials(data.grouped || [])
+      } catch (error) {
+        console.error("Error fetching materials:", error)
+      } finally {
+        setLoadingMaterials(false)
+      }
+    }
+    fetchMaterials()
+  }, [])
+
+  const availableGlassColors = groupedMaterials.map(m => m.baseName)
 
   const profileColors = ["Branco", "Preto", "Bronze Anod", "Bronze Pint", "Brilhante", "Champanhe", "Natural Cromado"]
 
   const handleInputChange = (field: keyof CalculationData, value: string | number) => {
     setCalculationData((prev) => ({ ...prev, [field]: value }))
     setMessage(null)
-
-    // Auto-calculate when relevant fields change
-    if (["largura", "altura", "quantidade", "margem"].includes(field)) {
-      setTimeout(() => calculateValues(), 100)
-    }
   }
 
-  const calculateValues = () => {
-    if (!calculationData.item || !calculationData.largura || !calculationData.altura) {
+  const calculateValues = async () => {
+    if (!calculationData.item || !calculationData.largura || !calculationData.altura || !calculationData.temperado || !calculationData.corVidro) {
       return
     }
 
     setIsCalculating(true)
 
-    // Mock calculation logic
-    setTimeout(() => {
-      const area = (calculationData.largura * calculationData.altura) / 1000000 // Convert mm² to m²
-      const baseCost = area * 150 // R$ 150 per m² base cost
-      const marginMultiplier = 1 + calculationData.margem / 100
-      const unitPrice = baseCost * marginMultiplier
-      const totalPrice = unitPrice * calculationData.quantidade
+    try {
+      // 1. Get the kit for this tipology (first kit for now)
+      const tipologyRes = await fetch(`/api/tipologies/${calculationData.item}`)
+      const tipology = await tipologyRes.json()
+      const kitId = tipology.Kits?.[0]?.id
 
-      setCalculationData((prev) => ({
+      if (!kitId) {
+        console.error("No kit found for this tipology")
+        return
+      }
+
+      // 2. Call the calculation engine API
+      const calcRes = await fetch("/api/calculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kitId,
+          width: calculationData.largura,
+          height: calculationData.altura,
+          quantity: calculationData.quantidade,
+          flags: { social: false } // placeholder
+        })
+      })
+
+      const engineResult = await calcRes.json()
+
+      // 3. Add glass area cost manually (since calculateKit calculates components only)
+      const selectedGroup = groupedMaterials.find(m => m.baseName === calculationData.corVidro)
+      const providerInfo = selectedGroup?.providers[calculationData.temperado]
+      const glassUnitPrice = providerInfo?.price || 0
+      
+      const areaM2 = (calculationData.largura * calculationData.altura) / 1000000
+      const glassTotalCost = areaM2 * glassUnitPrice * calculationData.quantidade
+      
+      const totalCostWithGlass = (engineResult.totalCost || 0) + glassTotalCost
+      const marginMultiplier = 1 + (calculationData.margem / 100)
+      
+      setCalculationResult({
+        ...engineResult,
+        glassCost: glassTotalCost,
+        totalCost: totalCostWithGlass * marginMultiplier
+      })
+
+      setCalculationData(prev => ({
         ...prev,
-        valorUnitario: unitPrice,
-        valorTotal: totalPrice,
+        valorUnitario: (totalCostWithGlass / calculationData.quantidade) * marginMultiplier,
+        valorTotal: totalCostWithGlass * marginMultiplier
       }))
 
+    } catch (error) {
+      console.error("Calculation failed:", error)
+    } finally {
       setIsCalculating(false)
-    }, 500)
+    }
   }
+
+  useEffect(() => {
+    if (groupedMaterials.length > 0) {
+      calculateValues()
+    }
+  }, [calculationData.largura, calculationData.altura, calculationData.quantidade, calculationData.margem, calculationData.item, calculationData.temperado, calculationData.corVidro, groupedMaterials])
 
   const handleClear = () => {
     setCalculationData({
@@ -143,19 +192,64 @@ export function GlassCalculationForm() {
     setMessage(null)
   }
 
-  const handleLaunch = () => {
-    if (!calculationData.item) {
-      setMessage({ type: "error", text: "Selecione um item." })
+  const handleLaunch = async () => {
+    if (!calculationData.item || !calculationData.valorTotal) {
+      setMessage({ type: "error", text: "Realize o cálculo antes de lançar." })
       return
     }
 
-    if (!calculationData.largura || !calculationData.altura) {
-      setMessage({ type: "error", text: "Dimensões inválidas." })
-      return
-    }
+    setIsCalculating(true)
+    try {
+      // 1. Get or create a draft budget number from localStorage
+      let budgetNumber = localStorage.getItem("currentBudgetNumber")
+      
+      if (!budgetNumber) {
+        // Create a new draft budget
+        const startRes = await fetch("/api/budgets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Em edição", items: [] })
+        })
+        const newBudget = await startRes.json()
+        budgetNumber = newBudget.number
+        if (budgetNumber) localStorage.setItem("currentBudgetNumber", budgetNumber)
+      }
 
-    // Simulate adding to quote sheet
-    setMessage({ type: "success", text: "Item lançado na folha." })
+      // 2. Add the item to this budget
+      const selectedGroup = groupedMaterials.find(m => m.baseName === calculationData.corVidro)
+      const res = await fetch("/api/budgets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          number: budgetNumber,
+          item: {
+            tipologyId: calculationData.item,
+            name: `${selectedTipology?.name || "Vidro"} - ${calculationData.corVidro} (${calculationData.temperado})`,
+            width: calculationData.largura,
+            height: calculationData.altura,
+            quantity: calculationData.quantidade,
+            unitPrice: calculationData.valorUnitario,
+            totalPrice: calculationData.valorTotal,
+            details: {
+              corVidro: calculationData.corVidro,
+              provider: calculationData.temperado,
+              components: calculationResult?.components || []
+            }
+          }
+        })
+      })
+
+      if (res.ok) {
+        setMessage({ type: "success", text: `Item lançado no orçamento ${budgetNumber}!` })
+      } else {
+        setMessage({ type: "error", text: "Erro ao salvar item no orçamento." })
+      }
+    } catch (error) {
+      console.error("Launch error:", error)
+      setMessage({ type: "error", text: "Falha na comunicação com o servidor." })
+    } finally {
+      setIsCalculating(false)
+    }
   }
 
   const formatCurrency = (value: number) => {
@@ -196,9 +290,9 @@ export function GlassCalculationForm() {
           </div>
         </div>
       </header>
-
+      
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8 max-w-6xl">
+      <main className="container mx-auto px-6 py-8 max-w-6xl space-y-6">
         {/* Status Messages */}
         {message && (
           <Alert
@@ -214,43 +308,38 @@ export function GlassCalculationForm() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Configuration Panel */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Item Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Seleção do Item</CardTitle>
-                <CardDescription>Escolha o tipo de produto para orçamento</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div>
-                  <Label htmlFor="item">Procure o item</Label>
-                  <Select value={calculationData.item} onValueChange={(value) => handleInputChange("item", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um item..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {glassItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.nome} ({item.categoria})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+        {/* 1. Catalog Section (Full Width) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" /> Catálogo de Tipologias
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TypologySelector
+              category="Vidro"
+              onSelect={(t) => {
+                handleInputChange("item", t.id)
+                setSelectedTipology(t)
+              }}
+            />
+          </CardContent>
+        </Card>
 
+        {/* 2. Side-by-Side Configuration & Results */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Left Panel: Configuration (2/3 columns) */}
+          <div className="lg:col-span-2 space-y-6">
+            
             {/* Dimensions */}
             <Card>
               <CardHeader>
-                <CardTitle>Dimensões</CardTitle>
-                <CardDescription>Medidas em milímetros (mm)</CardDescription>
+                <CardTitle className="text-sm font-semibold">Dimensões (mm)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="largura">Largura (mm) *</Label>
                     <Input
                       id="largura"
@@ -258,10 +347,10 @@ export function GlassCalculationForm() {
                       min="1"
                       value={calculationData.largura || ""}
                       onChange={(e) => handleInputChange("largura", Number.parseInt(e.target.value) || 0)}
-                      placeholder="Ex: 1200"
+                      placeholder="0"
                     />
                   </div>
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="altura">Altura (mm) *</Label>
                     <Input
                       id="altura"
@@ -269,256 +358,271 @@ export function GlassCalculationForm() {
                       min="1"
                       value={calculationData.altura || ""}
                       onChange={(e) => handleInputChange("altura", Number.parseInt(e.target.value) || 0)}
-                      placeholder="Ex: 1500"
+                      placeholder="0"
                     />
                   </div>
-                  {needsSecondWidth && (
-                    <div>
-                      <Label htmlFor="largura2">Largura 2 (Canto) (mm)</Label>
-                      <Input
-                        id="largura2"
-                        type="number"
-                        min="1"
-                        value={calculationData.largura2 || ""}
-                        onChange={(e) => handleInputChange("largura2", Number.parseInt(e.target.value) || 0)}
-                        placeholder="Ex: 800"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="w-full md:w-32">
-                  <Label htmlFor="quantidade">Quantidade</Label>
-                  <Input
-                    id="quantidade"
-                    type="number"
-                    min="1"
-                    value={calculationData.quantidade}
-                    onChange={(e) => handleInputChange("quantidade", Number.parseInt(e.target.value) || 1)}
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="quantidade">Quantidade</Label>
+                    <Input
+                      id="quantidade"
+                      type="number"
+                      min="1"
+                      value={calculationData.quantidade}
+                      onChange={(e) => handleInputChange("quantidade", Number.parseInt(e.target.value) || 1)}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Product Characteristics */}
+            {/* Characteristics */}
             <Card>
               <CardHeader>
-                <CardTitle>Características do Produto</CardTitle>
+                <CardTitle className="text-sm font-semibold">Especificações do Vidro</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Temperado</Label>
-                  <div className="flex space-x-4 mt-2">
-                    {["Tempermax", "Divinal", "Blindex"].map((option) => (
-                      <label key={option} className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="temperado"
-                          value={option}
-                          checked={calculationData.temperado === option}
-                          onChange={(e) => handleInputChange("temperado", e.target.value)}
-                          className="text-primary"
-                        />
-                        <span className="text-sm">{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="corVidro">Cor do Vidro / espessura (mm)</Label>
+              <CardContent className="space-y-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>Cor / Desenho do Vidro</Label>
                     <Select
                       value={calculationData.corVidro}
                       onValueChange={(value) => handleInputChange("corVidro", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
+                        <SelectValue placeholder="Selecione o modelo..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {glassColors.map((color) => (
-                          <SelectItem key={color} value={color}>
-                            {color}
-                          </SelectItem>
+                        {availableGlassColors.map((color) => (
+                          <SelectItem key={color} value={color}>{color}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div>
-                    <Label htmlFor="corPerfil">Cor do Perfil</Label>
+                  <div className="space-y-3">
+                    <Label>Marca / Fornecedor</Label>
+                    {!calculationData.corVidro ? (
+                      <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md border border-dashed">
+                        Selecione o modelo do vidro primeiro
+                      </div>
+                    ) : (
+                      <div className="flex gap-4">
+                        {Object.keys(groupedMaterials.find(m => m.baseName === calculationData.corVidro)?.providers || {}).map(brand => {
+                          const price = groupedMaterials.find(m => m.baseName === calculationData.corVidro)?.providers[brand]?.price || 0
+                          
+                          return (
+                            <div 
+                              key={brand} 
+                              className="group relative flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 cursor-pointer border border-transparent hover:border-border transition-all flex-1" 
+                              onClick={() => handleInputChange("temperado", brand)}
+                            >
+                               <input 
+                                 type="radio" 
+                                 name="brand" 
+                                 checked={calculationData.temperado === brand} 
+                                 className="h-4 w-4 text-primary"
+                                 readOnly 
+                               />
+                               <div className="flex flex-col">
+                                 <span className="text-xs font-semibold truncate max-w-[80px]">{brand}</span>
+                                 <span className="text-[10px] text-muted-foreground">{price > 0 ? formatCurrency(price) : "Indisponível"}</span>
+                               </div>
+                            </div>
+                          )
+                        })}
+                        {Object.keys(groupedMaterials.find(m => m.baseName === calculationData.corVidro)?.providers || {}).length === 0 && (
+                          <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md border border-dashed w-full">
+                            Sem fornecedores cadastrados para este vidro
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="corPerfil">Cor do Kit / Perfil</Label>
                     <Select
                       value={calculationData.corPerfil}
                       onValueChange={(value) => handleInputChange("corPerfil", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
+                        <SelectValue placeholder="Selecione a cor..." />
                       </SelectTrigger>
                       <SelectContent>
                         {profileColors.map((color) => (
-                          <SelectItem key={color} value={color}>
-                            {color}
-                          </SelectItem>
+                          <SelectItem key={color} value={color}>{color}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ambiente">Local da Obra (Ambiente)</Label>
+                    <Input
+                      id="ambiente"
+                      value={calculationData.ambiente}
+                      onChange={(e) => handleInputChange("ambiente", e.target.value)}
+                      placeholder="Ex: Sala, Cozinha..."
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="ambiente">Ambiente</Label>
-                  <Input
-                    id="ambiente"
-                    value={calculationData.ambiente}
-                    onChange={(e) => handleInputChange("ambiente", e.target.value)}
-                    placeholder="Ex: Sala, Cozinha, Banheiro"
-                  />
-                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Results and Actions Panel */}
+          {/* Right Panel: Results & Actions (1/3 columns) */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Values */}
-            <Card>
+            <Card className="h-full flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <DollarSign className="h-5 w-5" />
-                  <span>Valores</span>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                   <DollarSign className="h-5 w-5" /> Resumo de Valor
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">R$ Unitário:</span>
+              <CardContent className="flex-1 space-y-6">
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-sm border-b pb-2">
+                    <span className="text-muted-foreground">Preço Unitário:</span>
                     <span className="font-semibold text-lg">
                       {isCalculating ? "..." : formatCurrency(calculationData.valorUnitario)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">R$ Total:</span>
-                    <span className="font-bold text-xl text-primary">
+
+                  <div className="bg-muted/30 rounded-lg p-4 text-center">
+                    <span className="text-xs text-muted-foreground block mb-1">Total Geral Proposto</span>
+                    <span className="font-bold text-3xl text-primary">
                       {isCalculating ? "..." : formatCurrency(calculationData.valorTotal)}
                     </span>
                   </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <Button variant="outline" size="sm" onClick={() => setShowMarginModal(true)} className="w-full justify-between">
+                      <span className="flex items-center gap-2"><Percent className="h-4 w-4" /> Margem de Lucro</span>
+                      <span className="font-bold">{calculationData.margem}%</span>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowCostModal(true)} className="w-full justify-between">
+                      <span className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Composição de Custos</span>
+                      <span className="text-[10px] uppercase font-bold text-primary">Ver</span>
+                    </Button>
+                  </div>
                 </div>
 
-                <Separator />
+                <div className="space-y-3 pt-4 border-t">
+                   <div className="flex gap-2">
+                      <Button onClick={calculateValues} disabled={isCalculating} variant="outline" className="flex-1">
+                         <RefreshCw className={`h-4 w-4 mr-2 ${isCalculating ? 'animate-spin' : ''}`} /> Atualizar
+                      </Button>
+                      <Button onClick={handleClear} variant="outline" className="flex-1">
+                         Limpar
+                      </Button>
+                   </div>
 
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowMarginModal(true)}
-                    className="w-full flex items-center space-x-2 bg-transparent"
-                  >
-                    <Percent className="h-4 w-4" />
-                    <span>Margem ({calculationData.margem}%)</span>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCostModal(true)}
-                    className="w-full flex items-center space-x-2 bg-transparent"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                    <span>Custos</span>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCompareModal(true)}
-                    className="w-full flex items-center space-x-2 bg-transparent"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    <span>Temperar + Barata</span>
-                  </Button>
+                   <Button 
+                     onClick={handleLaunch} 
+                     disabled={isCalculating} 
+                     className="w-full py-6 font-bold uppercase tracking-wider"
+                   >
+                     <FileText className="h-5 w-5 mr-2" /> 
+                     Lançar no Orçamento
+                   </Button>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Ações</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Link href="/itens-adicionais">
-                  <Button variant="outline" className="w-full flex items-center space-x-2 bg-transparent">
-                    <Plus className="h-4 w-4" />
-                    <span>Adicionais</span>
-                  </Button>
-                </Link>
-
-                <Link href="/calculo/aquario">
-                  <Button variant="outline" className="w-full flex items-center space-x-2 bg-transparent">
-                    <Fish className="h-4 w-4" />
-                    <span>Aquário</span>
-                  </Button>
-                </Link>
-
-                <Button
-                  onClick={calculateValues}
-                  disabled={isCalculating}
-                  className="w-full flex items-center space-x-2"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isCalculating ? "animate-spin" : ""}`} />
-                  <span>Atualizar</span>
-                </Button>
-
-                <Button
-                  onClick={handleClear}
-                  variant="outline"
-                  className="w-full flex items-center space-x-2 bg-transparent"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>Limpar</span>
-                </Button>
-
-                <Button onClick={handleLaunch} className="w-full flex items-center space-x-2">
-                  <FileText className="h-4 w-4" />
-                  <span>Lançar</span>
-                </Button>
               </CardContent>
             </Card>
           </div>
         </div>
+      </main>
 
-        {/* Margin Modal */}
-        {showMarginModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
-              <CardHeader>
-                <CardTitle>Aplicar Margem</CardTitle>
-                <CardDescription>Defina a margem de lucro sobre o custo base</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="margem">Margem (%)</Label>
-                  <Input
-                    id="margem"
+      {/* Margin Modal */}
+      {showMarginModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle className="text-sm font-bold">Aplicar Margem</CardTitle>
+              <CardDescription>Defina a porcentagem de lucro sobre o custo</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold">Margem Atual: {calculationData.margem}%</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleInputChange("margem", Math.max(0, calculationData.margem - 5))}>-5%</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleInputChange("margem", calculationData.margem + 5)}>+5%</Button>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                   <Label htmlFor="input-margem">Definir Valor:</Label>
+                   <Input
+                    id="input-margem"
                     type="number"
-                    min="0"
-                    max="1000"
                     value={calculationData.margem}
-                    onChange={(e) => handleInputChange("margem", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleInputChange("margem", Number(e.target.value))}
                   />
                 </div>
-                <div className="flex space-x-2">
-                  <Button onClick={() => setShowMarginModal(false)} className="flex-1">
-                    Aplicar
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowMarginModal(false)} className="flex-1 bg-transparent">
-                    Cancelar
-                  </Button>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t">
+                <Button onClick={() => setShowMarginModal(false)} className="flex-1">Confirmar</Button>
+                <Button variant="outline" onClick={() => setShowMarginModal(false)} className="flex-1">Fechar</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Cost Modal */}
+      {showCostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-xl">
+            <CardHeader className="border-b">
+              <CardTitle className="text-sm font-bold">Composição de Custos</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                <div className="flex justify-between text-xs font-bold uppercase text-muted-foreground border-b pb-2">
+                  <span>Item</span>
+                  <span>Subtotal</span>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </main>
+                
+                <div className="flex justify-between items-center py-2 border-b border-muted/50">
+                   <div className="flex flex-col">
+                      <span className="text-sm font-medium">{calculationData.corVidro} ({calculationData.temperado})</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">Área: {((calculationData.largura * calculationData.altura) / 1000000).toFixed(2)} m²</span>
+                   </div>
+                   <span className="font-semibold text-sm">
+                      {formatCurrency(calculationResult?.glassCost || 0)}
+                   </span>
+                </div>
+
+                {calculationResult?.components?.map((comp: any, idx: number) => (
+                   <div key={idx} className="flex justify-between items-center py-2 border-b border-muted/50">
+                      <div className="flex flex-col">
+                         <span className="text-sm font-medium">{comp.materialName || "Componente Kit"}</span>
+                         <span className="text-[10px] text-muted-foreground uppercase">Qtd: {comp.calculatedQuantity.toFixed(2)}</span>
+                      </div>
+                      <span className="font-semibold text-sm">
+                         {formatCurrency(comp.totalCost || 0)}
+                      </span>
+                   </div>
+                ))}
+              </div>
+
+              <div className="bg-muted p-4 rounded-lg flex justify-between items-center">
+                 <span className="text-xs font-bold">Custo Base Total:</span>
+                 <span className="text-xl font-bold">
+                    {formatCurrency(calculationData.valorUnitario / (1 + calculationData.margem / 100))}
+                 </span>
+              </div>
+
+              <Button onClick={() => setShowCostModal(false)} className="w-full">Fechar Detalhamento</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

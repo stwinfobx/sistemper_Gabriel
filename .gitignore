@@ -20,3 +20,5 @@ pnpm-debug.log*
 # env
 .env
 .env.*
+
+/lib/generated/prisma

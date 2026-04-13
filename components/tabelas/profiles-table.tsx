@@ -1,258 +1,302 @@
 "use client"
 
-import Image from "next/image"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { Loader2, RefreshCw, Save, TrendingUp, Search, Ruler } from "lucide-react"
 
-type ProfileRow = {
+type Material = {
   id: string
-  code: string
   name: string
-  category: string
-  adjustment: number
-  basePrice: number
-  image: string
+  baseName: string | null
+  type: string
+  category: string | null
+  price: number
 }
 
-const profiles: ProfileRow[] = [
-  {
-    id: "p1",
-    code: "PRF-U08",
-    name: "Perfil U 08mm",
-    category: "Estrutural",
-    adjustment: 6,
-    basePrice: 41.2,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p2",
-    code: "PRF-T10",
-    name: "Trilho Superior 10mm",
-    category: "Trilhos",
-    adjustment: 5,
-    basePrice: 56.93,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p3",
-    code: "PRF-CLP",
-    name: "Clip Junta",
-    category: "Estrutural",
-    adjustment: 4,
-    basePrice: 9.9,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p4",
-    code: "PRF-ESQ",
-    name: "Escovinha 3M",
-    category: "Vedação",
-    adjustment: 3,
-    basePrice: 11.5,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p5",
-    code: "PRF-LTR",
-    name: "Light Roller Inferior",
-    category: "Rolos",
-    adjustment: 8,
-    basePrice: 95.0,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p6",
-    code: "PRF-CN8",
-    name: "Cantoneira 8mm",
-    category: "Estrutural",
-    adjustment: 4,
-    basePrice: 26.43,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p7",
-    code: "PRF-PIS",
-    name: "Perfil de Piso 2\"",
-    category: "Estrutural",
-    adjustment: 6,
-    basePrice: 65.9,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p8",
-    code: "PRF-STN",
-    name: "Trilho Sup. Stanley",
-    category: "Kit Box",
-    adjustment: 7,
-    basePrice: 117.87,
-    image: "/placeholder.jpg",
-  },
-  {
-    id: "p9",
-    code: "PRF-SUP",
-    name: "Suporte Mão Amiga",
-    category: "Acessórios",
-    adjustment: 5,
-    basePrice: 18.55,
-    image: "/placeholder.jpg",
-  },
-]
-
-const puxadores = [
-  { code: "PX-ONIX30", name: "Puxador Ônix 30cm", price: 268.0 },
-  { code: "PX-SAF30", name: "Puxador Safira 30cm", price: 320.0 },
-  { code: "PX-H40", name: "Puxador H 40cm", price: 90.0 },
-  { code: "PX-MAD", name: "Puxador Bola Madeira", price: 35.0 },
-]
-
-const maxArArms = [
-  { code: "MX-15", size: "15 cm", price: 34.36 },
-  { code: "MX-25", size: "25 cm", price: 45.33 },
-  { code: "MX-35", size: "35 cm", price: 79.02 },
-  { code: "MX-45", size: "45 cm", price: 99.63 },
-  { code: "MX-60", size: "60 cm", price: 113.37 },
-  { code: "MX-100", size: "1 m", price: 171.78 },
-]
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value)
+type Adjustment = {
+  type: string
+  provider: string | null
+  percentage: string
+}
 
 export function ProfilesTable() {
   const [search, setSearch] = useState("")
+  const [materials, setMaterials] = useState<Material[]>([])
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [inputAdjustment, setInputAdjustment] = useState(0)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [newPrice, setNewPrice] = useState("")
 
-  const filteredProfiles = useMemo(() => {
-    if (!search) return profiles
+  useEffect(() => {
+    if (selectedMaterial) {
+      setNewPrice(selectedMaterial.price.toString())
+    }
+  }, [selectedMaterial])
+
+  const handleUpdateSinglePrice = async () => {
+    if (!selectedMaterial || !newPrice) return
+    setIsUpdating(true)
+    try {
+      const response = await fetch("/api/materials", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedMaterial.id, price: Number(newPrice) })
+      })
+      if (response.ok) {
+        await fetchMaterials()
+        setIsModalOpen(false)
+      } else {
+        console.error("Failed to update price")
+      }
+    } catch (error) {
+      console.error("Error updating price:", error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const fetchMaterials = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/materials?type=Aluminum")
+      const data = await response.json()
+      if (data && data.materials && Array.isArray(data.materials)) {
+        setMaterials(data.materials)
+        setAdjustments(data.adjustments || [])
+      } else {
+        console.warn("Materials data format unexpected:", data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch materials:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMaterials()
+  }, [])
+
+  const filteredMaterials = useMemo(() => {
     const normalized = search.trim().toLowerCase()
-    return profiles.filter(
-      (profile) =>
-        profile.code.toLowerCase().includes(normalized) ||
-        profile.name.toLowerCase().includes(normalized) ||
-        profile.category.toLowerCase().includes(normalized),
+    return materials.filter(m =>
+      m.name.toLowerCase().includes(normalized) ||
+      (m.baseName && m.baseName.toLowerCase().includes(normalized))
     )
-  }, [search])
+  }, [search, materials])
+
+  const currentAdjustment = useMemo(() => {
+    const adj = adjustments.find(a => a.type === "Aluminum")
+    return adj ? Number(adj.percentage) : 0
+  }, [adjustments])
+
+  const handleApplyIncrease = async () => {
+    if (inputAdjustment === 0) return
+    setIsUpdating(true)
+    try {
+      const response = await fetch("/api/materials", {
+        method: "PATCH",
+        body: JSON.stringify({
+          type: "Aluminum",
+          increment: inputAdjustment
+        })
+      })
+      if (response.ok) {
+        await fetchMaterials()
+        setInputAdjustment(0)
+      }
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value)
+
+  if (loading) {
+    return (
+      <div className="h-64 flex flex-col items-center justify-center gap-4 opacity-50">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="text-xs font-black uppercase tracking-widest text-primary">Sincronizando Alumínios...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle>Tabela de perfis</CardTitle>
-          <CardDescription>Confira ajustes de perfis estruturais, trilhos e acessórios ligados aos kits de alumínio.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="busca-perfis">Pesquisar por código ou descrição</Label>
-          <Input
-            id="busca-perfis"
-            placeholder="Ex.: PRF-U08, trilho, escovinha..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="overflow-auto rounded-md border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead>Imagem</TableHead>
-              <TableHead>Código</TableHead>
-              <TableHead>Produto</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead className="text-right">Tabela base</TableHead>
-              <TableHead className="text-right">Aumento (%)</TableHead>
-              <TableHead className="text-right">Preço reajustado</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredProfiles.map((profile) => {
-              const finalPrice = profile.basePrice * (1 + profile.adjustment / 100)
-              return (
-                <TableRow key={profile.id}>
-                  <TableCell>
-                    <div className="relative h-12 w-16 overflow-hidden rounded-md border bg-muted">
-                      <Image src={profile.image} alt={profile.name} fill className="object-cover" />
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-semibold">{profile.code}</TableCell>
-                  <TableCell>{profile.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{profile.category}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{formatCurrency(profile.basePrice)}</TableCell>
-                  <TableCell className="text-right text-primary">{profile.adjustment.toFixed(1)}%</TableCell>
-                  <TableCell className="text-right font-semibold">{formatCurrency(finalPrice)}</TableCell>
-                </TableRow>
-              )
-            })}
-            {filteredProfiles.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
-                  Nenhum perfil encontrado. Ajuste a busca.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
       <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Listas rápidas</CardTitle>
-          <CardDescription>Consulte os puxadores e braços de max-ar homologados para o catálogo.</CardDescription>
+        <CardHeader className="pb-3 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-bold">Perfis de Alumínio</CardTitle>
+              <CardDescription>Busca e consulta de preços por metro linear</CardDescription>
+            </div>
+            <Badge variant="outline" className="font-bold">
+              {filteredMaterials.length} Itens
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-2">
-          <div>
-            <Label className="mb-2 block text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Lista de puxadores
-            </Label>
-            <ScrollArea className="h-48 rounded-md border">
-              <div className="p-3 space-y-3">
-                {puxadores.map((item) => (
-                  <div key={item.code} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{item.name}</span>
-                      <span className="text-xs text-muted-foreground">{item.code}</span>
-                    </div>
-                    <span className="text-sm font-semibold">{formatCurrency(item.price)}</span>
-                  </div>
-                ))}
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por descrição ou código do perfil..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 h-12"
+              />
+            </div>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Reajuste Global Alumínio (%)</Label>
+                <div className="relative">
+                  <Input 
+                    type="number" 
+                    value={inputAdjustment || ""} 
+                    onChange={e => setInputAdjustment(Number(e.target.value))}
+                    className="h-12 font-bold pr-8"
+                    placeholder="0.00"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
+                </div>
               </div>
-            </ScrollArea>
+              <Button 
+                onClick={handleApplyIncrease} 
+                className="h-12 font-bold gap-2"
+                disabled={isUpdating || inputAdjustment === 0}
+              >
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                Aplicar
+              </Button>
+            </div>
           </div>
-          <div>
-            <Label className="mb-2 block text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Braços de max-ar
-            </Label>
-            <ScrollArea className="h-48 rounded-md border">
-              <div className="p-3 space-y-3">
-                {maxArArms.map((item) => (
-                  <div key={item.code} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{item.size}</span>
-                      <span className="text-xs text-muted-foreground">{item.code}</span>
-                    </div>
-                    <span className="text-sm font-semibold">{formatCurrency(item.price)}</span>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
+          {currentAdjustment !== 0 && (
+            <div className="mt-4 p-2 bg-primary/10 rounded-md border border-primary/20 flex items-center justify-between">
+              <span className="text-xs font-bold text-primary italic">Este tipo de material já possui um reajuste acumulado de {currentAdjustment}%</span>
+              <Button variant="ghost" size="sm" className="h-6 text-[10px] uppercase font-bold" onClick={() => { setInputAdjustment(-currentAdjustment); }}>Zerar</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Os valores apresentados são referências internas. Ajustes adicionais podem ser registrados no módulo de itens
-        adicionais.
-      </p>
+      <Card className="shadow-md overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 py-4 px-6 flex flex-row items-center justify-between">
+           <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Tabela de Materiais</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow>
+                <TableHead className="pl-8 py-4 font-bold uppercase text-[10px] tracking-wider">Descrição do Perfil</TableHead>
+                <TableHead className="font-bold uppercase text-[10px] tracking-wider">Categoria</TableHead>
+                <TableHead className="text-right pr-8 font-bold uppercase text-[10px] tracking-wider">Preço (m)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMaterials.map((m) => (
+                <TableRow 
+                  key={m.id} 
+                  className="hover:bg-muted/50 transition-colors border-b cursor-pointer"
+                  onClick={() => {
+                    setSelectedMaterial(m)
+                    setIsModalOpen(true)
+                  }}
+                >
+                  <TableCell className="pl-8 py-4">
+                    <span className="font-medium text-sm">
+                      {m.baseName || m.name.replace("ALUM-", "")}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {m.category || "Perfil"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-bold pr-8">
+                    {formatCurrency(Number(m.price))}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Material Detail Modal */}
+      {isModalOpen && selectedMaterial && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl shadow-xl overflow-hidden">
+            <CardHeader className="px-6 py-4 flex flex-row items-center justify-between border-b-0 pb-0">
+              <div>
+                <CardTitle className="text-xl font-bold">
+                   {selectedMaterial.name}
+                </CardTitle>
+                <CardDescription>Detalhes e precificação técnica</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>Fechar</Button>
+            </CardHeader>
+            <CardContent className="p-6 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Visual */}
+                <div className="space-y-4">
+                  <div className="aspect-square bg-muted/50 rounded-lg flex items-center justify-center border border-dashed">
+                    <Ruler className="h-12 w-12 text-muted-foreground/20" />
+                  </div>
+                  <div className="space-y-1">
+                     <h4 className="text-xs font-bold uppercase text-muted-foreground">Especificações</h4>
+                     <p className="text-sm">
+                        Perfil de alumínio extrudado. Categoria: {selectedMaterial.category || "Não definida"}.
+                     </p>
+                  </div>
+                </div>
+
+                {/* Price Management */}
+                <div className="space-y-6">
+                  <div className="p-4 border rounded-lg bg-muted/20">
+                     <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Preço Atual</span>
+                     <span className="text-2xl font-bold text-primary">
+                        {formatCurrency(selectedMaterial.price)}
+                     </span>
+                  </div>
+
+                  <div className="space-y-2">
+                     <Label className="text-xs font-bold uppercase text-muted-foreground">Atualizar Preço (unitário/m)</Label>
+                     <div className="flex gap-2">
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          placeholder="Ex: 12.50"
+                          className="h-10"
+                          value={newPrice}
+                          onChange={(e) => setNewPrice(e.target.value)}
+                        />
+                        <Button 
+                          size="sm"
+                          onClick={handleUpdateSinglePrice}
+                          disabled={isUpdating}
+                        >
+                          {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+                        </Button>
+                     </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
