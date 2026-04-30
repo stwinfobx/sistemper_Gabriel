@@ -26,38 +26,38 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
-    // Simular autenticação
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password,
+        }),
+      })
 
-      // Credenciais de exemplo
-      const validCredentials = [
-        { username: "admin", password: "admin123", role: "admin" },
-        { username: "vendedor", password: "vend123", role: "vendedor" },
-        { username: "demo", password: "demo", role: "admin" },
-      ]
+      const data = await response.json()
 
-      const user = validCredentials.find(
-        (cred) => cred.username === formData.username && cred.password === formData.password,
-      )
-
-      if (user) {
+      if (response.ok && data.user) {
         // Salvar dados do usuário no localStorage
         localStorage.setItem(
           "sistemper_user",
           JSON.stringify({
-            username: user.username,
-            role: user.role,
-            loginTime: new Date().toISOString(),
+            username: data.user.username,
+            role: data.user.role,
+            loginTime: data.user.loginTime,
+            token: data.token
           }),
         )
 
         router.push("/")
       } else {
-        setError("Usuário ou senha incorretos")
+        setError(data.error || "Usuário ou senha incorretos")
       }
     } catch (err) {
-      setError("Erro ao fazer login. Tente novamente.")
+      setError("Erro ao se conectar com o servidor. Tente novamente.")
     } finally {
       setIsLoading(false)
     }

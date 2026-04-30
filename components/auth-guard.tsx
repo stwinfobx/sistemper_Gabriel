@@ -29,9 +29,27 @@ export function AuthGuard({ children }: AuthGuardProps) {
         if (userData) {
           const parsedUser = JSON.parse(userData)
 
-          // Verificar se o login não expirou (24 horas)
-          const loginTime = new Date(parsedUser.loginTime)
           const now = new Date()
+
+          // Verificar se o usuário foi banido
+          if (parsedUser.isBanned) {
+            localStorage.removeItem("sistemper_user")
+            router.push("/login?error=banned")
+            return
+          }
+
+          // Verificar expiração da licença/conta
+          if (parsedUser.expiresAt) {
+            const expDate = new Date(parsedUser.expiresAt)
+            if (expDate < now) {
+              router.push("/activate")
+              setIsLoading(false)
+              return
+            }
+          }
+
+          // Verificar se o login da sessão (24h) não expirou
+          const loginTime = new Date(parsedUser.loginTime)
           const hoursDiff = (now.getTime() - loginTime.getTime()) / (1000 * 60 * 60)
 
           if (hoursDiff < 24) {
@@ -52,8 +70,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
       }
     }
 
-    // Não verificar autenticação na página de login
-    if (pathname === "/login") {
+    const publicRoutes = ["/login", "/register", "/activate"]
+    if (publicRoutes.includes(pathname)) {
       setIsLoading(false)
       return
     }
@@ -61,8 +79,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
     checkAuth()
   }, [router, pathname])
 
-  // Página de login não precisa de autenticação
-  if (pathname === "/login") {
+  const publicRoutes = ["/login", "/register", "/activate"]
+  if (publicRoutes.includes(pathname)) {
     return <>{children}</>
   }
 

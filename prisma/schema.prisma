@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres:shujin791@localhost:5432/sistemper?schema=public"
+  url      = env("DATABASE_URL")
 }
 
 model Tipology {
@@ -113,4 +113,29 @@ model SystemConfig {
   key         String   @unique
   value       String
   description String?
+}
+
+model User {
+  id        String       @id @default(cuid())
+  name      String
+  username  String       @unique
+  password  String
+  role      String       @default("vendedor")
+  isActive  Boolean      @default(true)
+  isBanned  Boolean      @default(false)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  usedKeys  LicenseKey[]
+}
+
+model LicenseKey {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  daysValid Int       @default(30)
+  isUsed    Boolean   @default(false)
+  usedById  String?
+  usedBy    User?     @relation(fields: [usedById], references: [id])
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 }

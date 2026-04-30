@@ -65,10 +65,16 @@ export function UserMenu() {
           <User className="mr-2 h-4 w-4" />
           <span>Perfil</span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer">
+        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/empresa')}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Configurações</span>
         </DropdownMenuItem>
+        {user.role === "admin" && (
+          <DropdownMenuItem className="cursor-pointer font-medium text-blue-500 focus:text-blue-600" onClick={() => router.push('/admin')}>
+            <Shield className="mr-2 h-4 w-4" />
+            <span>Painel Administrativo</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
